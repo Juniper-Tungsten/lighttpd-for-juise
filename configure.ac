@@ -2,6 +2,7 @@ dnl                                               -*- Autoconf -*-
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
 AC_INIT([lighttpd], [1.4.33], [contact@lighttpd.net])
+
 AC_CONFIG_SRCDIR([src/server.c])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -619,7 +620,7 @@ AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
 
 dnl check for extra compiler options (warning options)
 if test "${GCC}" = "yes"; then
-    CFLAGS="${CFLAGS} -Wall -W -Wshadow -pedantic -std=gnu99"
+    CFLAGS="${CFLAGS} -Wall -W -Wshadow -fno-inline-functions-called-once"
 fi
 
 AC_ARG_ENABLE(extra-warnings,
