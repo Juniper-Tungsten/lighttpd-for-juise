@@ -26,10 +26,19 @@
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Portions are:
+ * Copyright (c) 2000-2008, 2011-2013, Juniper Networks, Inc.
+ * All rights reserved.
+ * This SOFTWARE is licensed under the LICENSE provided in the
+ * ../Copyright file. By downloading, installing, copying, or otherwise
+ * using the SOFTWARE, you agree to be bound by the terms of that
+ * LICENSE.
  */
 
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "connections.h"
 #include "fdevent.h"
@@ -42,13 +51,30 @@
 # include <sys/filio.h>
 #endif	/* HAVE_SYS_FILIO_H */
 
+#ifndef NOTUSED
+#define NOTUSED __attribute__ ((__unused__))
+#endif /* NOTUSED */
+
+/*
+ * memdup(): allocates sufficient memory for a copy of the
+ * buffer buf, does the copy, and returns a pointer to it.  The pointer may
+ * subsequently be used as an argument to the function free(3).
+ * [Shamelessly lifted from juise/libjuise/string/strextra.h]
+ */
+static inline void *
+memdup (const void *buf, size_t size)
+{
+    void *vp = malloc(size);
+    if (vp) memcpy(vp, buf, size);
+    return vp;
+}
+
 /* prototypes */
 static handler_ctx *_handler_ctx_init(void);
 static void _handler_ctx_free(handler_ctx *);
 static int _set_subproto_extension(data_array *, const data_array *);
 static int _set_extension(data_array *, const data_array *);
-static int _tcp_server_connect(handler_ctx *);
-static void _tcp_server_disconnect(handler_ctx *);
+static void ws_disconnect(handler_ctx *);
 static handler_t _handle_fdevent(server *, void *, int);
 static int _dispatch_request(server *, connection *, plugin_data *);
 static handler_t _check_request(server *, connection *, void *);
@@ -118,7 +144,7 @@ void _handler_ctx_free(handler_ctx *hctx) {
     mod_websocket_conv_final(hctx->cnv);
 #endif	/* _MOD_WEBSOCKET_WITH_ICU_ */
 
-    _tcp_server_disconnect(hctx);
+    ws_disconnect(hctx);
     free(hctx);
     return;
 }
@@ -132,6 +158,7 @@ int _set_subproto_extension(data_array *dst, const data_array *src) {
     data_array *origins = NULL;
     data_string *origin = NULL;
     data_string *type = NULL;
+    data_string *command = NULL;
     buffer *key = NULL;
 #define	PORTSTRLEN_MAX	(5)
     char portstr[PORTSTRLEN_MAX + 1];
@@ -157,11 +184,18 @@ int _set_subproto_extension(data_array *dst, const data_array *src) {
                                           ((data_string *)data)->value);
             } else if (data->type == TYPE_INTEGER) {
                 memset(portstr, 0, PORTSTRLEN_MAX + 1);
-                snprintf(portstr, PORTSTRLEN_MAX + 1, "%d", ((data_string *)data)->value);
+                snprintf(portstr, PORTSTRLEN_MAX + 1, "%d", ((data_integer *)data)->value);
                 buffer_copy_string(port->value, portstr);
 #undef	PORTSTRLEN_MAX
             }
             array_insert_unique(dst->value, (data_unset *)port);
+	} else if ( 0 == strcmp(key->ptr, MOD_WEBSOCKET_CONFIG_COMMAND) ) {
+            command = data_string_init();
+            buffer_copy_string_buffer(command->key, key);
+            buffer_copy_string_buffer(command->value,
+                                      ((data_string *)data)->value);
+            array_insert_unique(dst->value, (data_unset *)command);
+
         } else if ( 0 == strcmp(key->ptr, MOD_WEBSOCKET_CONFIG_SUBPROTO) ) {
             buffer_copy_string_buffer(dst->key, ((data_string *)data)->value);
         } else if ( 0 == strcmp(key->ptr, MOD_WEBSOCKET_CONFIG_ORIGINS) ) {
@@ -201,10 +235,13 @@ int _set_subproto_extension(data_array *dst, const data_array *src) {
             array_insert_unique(dst->value, (data_unset *)type);
         }
     }
-    if (!host || !port) {
-        return -1;
-    }
-    return 0;
+    if (host && port)
+	return 0;
+
+    if (command)
+	return 0;
+    
+    return -1;
 }
 
 int _set_extension(data_array *dst, const data_array *src) {
@@ -244,17 +281,200 @@ int _set_extension(data_array *dst, const data_array *src) {
     return ret;
 }
 
-int _tcp_server_connect(handler_ctx *hctx) {
+static int ws_extract_value (handler_ctx *hctx, const char *name,
+			     char **ret, int fail) {
     data_unset *du;
-    buffer *host = NULL;
-    buffer *port = NULL;
+    char *val;
+
+    du = array_get_element(hctx->ext->value, name);
+    if (du == NULL) {
+	if (fail) {
+	    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "ss",
+		      "BUG: invalid config: missing ", name);
+	    hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
+	    hctx->con->mode = DIRECT;
+	}
+        return -1;
+    }
+
+    val = ((data_string *)du)->value->ptr;
+    if (val == NULL) {
+	if (fail) {
+	    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "ss",
+		      "BUG: invalid config: null ", name);
+	    hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
+	    hctx->con->mode = DIRECT;
+	}
+        return -1;
+    }
+
+    *ret = val;
+    return 0;
+}
+
+static char *ws_command_lookup (handler_ctx *hctx NOTUSED, char *varname) {
+    char *dot = index(varname, '.');
+    char *res = NULL;
+
+    if (dot) {
+	if (strncmp(varname, "env.", 4) == 0) {
+	} else if (strncmp(varname, "request.", 8) == 0) {
+	} else {
+	}
+    } else {
+	if (strcmp(varname, "remoteuser") == 0) {
+	    res = strdup(getlogin());
+	} else {
+	}
+    }
+
+    return res ?: strdup("");
+}
+
+#define MAX_ARGS 128
+#define MAX_ENV 128
+
+static int ws_command_build (handler_ctx *hctx, const char *command,
+			     char ***argvp) {
+    static char whitespace[] = " \t\n\r";
+    char *argv[MAX_ARGS];
+    int argc = 0;
+    const char *cp, *sp, *ep = command + strlen(command);
+    char buf[BUFSIZ], *bp = buf;
+    int bufsiz = sizeof(buf);
+    char *ap;
+    const int padding = 16;
+
+    for (cp = command; cp < ep; ) {
+	cp += strspn(cp, whitespace);
+	if (*cp == '\0')
+	    break;
+
+	for (ap = bp, sp = cp; cp < ep; cp++) {
+	    if (ap - bp > bufsiz + padding) { /* Small padding */
+		/* Grow our buffer, if needed */
+		char *np = alloca(bufsiz * 2);
+		memcpy(np, bp, bufsiz);
+		ap = np + (ap - bp);
+		bp = np;
+		bufsiz = bufsiz * 2;
+	    }
+
+	    if (*cp == '\\') {
+		*ap++ = *++cp;
+		continue;
+	    }
+
+	    if (index(whitespace, *cp) != NULL)
+		break;
+
+	    if (cp[0] == '$' && cp[1] == '{') {
+		const char *zp = index(cp + 2, '}');
+		if (zp) {
+		    const char *vp = cp + 2;
+		    int vl = zp - vp;
+		    char *var = alloca(vl);
+		    char *value;
+
+		    memcpy(var, vp, vl);
+		    var[vl] = '\0';
+		    value = ws_command_lookup(hctx, var);
+
+		    vl = strlen(value);
+		    if (ap - bp + vl > bufsiz + padding) {
+			int nbufsiz = 2 << (ffs(bufsiz + vl) + 1);
+			char *np = alloca(nbufsiz);
+			memcpy(np, bp, bufsiz);
+			ap = np + (ap - bp);
+			bp = np;
+			bufsiz = nbufsiz;
+		    }
+
+		    memcpy(ap, value, vl); /* Append argument */
+		    ap += vl;
+
+		    free(value); /* Free arg */
+		    cp = zp;	 /* Skip variable */
+		}
+		continue;	/* Go look at next character */
+	    }
+
+	    *ap++ = *cp;
+	}
+
+	*ap = '\0';
+	argv[argc++] = strdup(bp);
+    }
+
+    argv[argc++] = NULL;
+
+    *argvp = memdup(argv, sizeof(argv[0]) * argc);
+
+    return 0;
+}
+
+static int ws_command_execute (handler_ctx *hctx, const char *command) {
+    int fd[2], pid, i;
+    char *arg0;
+    char **args, **env = { NULL };
+
+    if (ws_command_build(hctx, command, &args))
+	return -1;
+
+    arg0 = args[0];
+
+    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "ss", "command:", arg0);
+    for (i = 0; args[i]; i++) {
+	DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "ss", " arg:", args[i]);
+    }
+
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) < 0) {
+	perror("socketpair failed");
+	return -1;
+    }
+
+    pid = fork();
+    if (pid < 0) {
+	perror("fork failed");
+	return -1;
+    }
+
+    if (pid == 0) {
+	/* Child: close half the pair and use the other half as stdin/out */
+	close(fd[1]);
+
+	close(0);
+	dup2(fd[0], 0);		/* stdin */
+	close(1);
+	dup2(fd[0], 1);		/* stdout */
+
+	execve(arg0, args, env);
+
+	DEBUG_LOG(MOD_WEBSOCKET_LOG_WARNING,
+		  "sss", "exec failed", strerror(errno), arg0);
+	_exit(1);
+    }
+
+    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "sd", "pid", pid);
+
+    /* Parent: close half the pair and mark the other as the real fd */
+    close(fd[0]);
+    hctx->fd = fd[1];
+
+    return 0;
+}
+
+static int ws_tcp_connect(handler_ctx *hctx) {
+    char *host = NULL;
+    char *port = NULL;
+    char *command = NULL;
     int flag = 1;
 
     // for logging remote ipaddr and port
     char logstr[4096];
     socklen_t len;
     struct sockaddr_storage caddr;
-    int cport, ret;
+    int cport = -1, ret;
 #ifndef INET6_ADDRSTRLEN
 # define	INET6_ADDRSTRLEN	(46)
 #endif
@@ -265,74 +485,52 @@ int _tcp_server_connect(handler_ctx *hctx) {
     char *locale = NULL;
 #endif	/* _MOD_WEBSOCKET_WITH_ICU_ */
 
-    du = array_get_element(hctx->ext->value, MOD_WEBSOCKET_CONFIG_HOST);
-    if (!du) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "BUG: invalid config");
-        hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
-        hctx->con->mode = DIRECT;
-        return -1;
-    }
-    host = ((data_string *)du)->value;
-    if (!host) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "BUG: invalid config");
-        hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
-        hctx->con->mode = DIRECT;
-        return -1;
-    }
-    du = array_get_element(hctx->ext->value, MOD_WEBSOCKET_CONFIG_PORT);
-    if (!du) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "BUG: invalid config");
-        hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
-        hctx->con->mode = DIRECT;
-        return -1;
-    }
-    port = ((data_string *)du)->value;
-    if (!port) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "BUG: invalid config");
-        hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
-        hctx->con->mode = DIRECT;
-        return -1;
-    }
-    snprintf(logstr, sizeof(logstr),
-             "try to connect backend server: %s:%s", host->ptr, port->ptr);
-    DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", logstr);
-    hctx->fd = mod_websocket_tcp_server_connect(host->ptr, port->ptr);
-    if (hctx->fd < 0) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_WARNING,
-                  "s", "fail to connect backend server");
-        hctx->con->http_status = MOD_WEBSOCKET_SERVICE_UNAVAILABLE;
-        hctx->con->mode = DIRECT;
-        return -1;
-    }
-    if (setsockopt(hctx->fd, IPPROTO_TCP, TCP_NODELAY,
-                   &flag, sizeof(flag)) == -1) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "fail to set TCP_NODELAY");
-        _tcp_server_disconnect(hctx);
-        hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
-        hctx->con->mode = DIRECT;
-        return HANDLER_FINISHED;
-    }
-    if (setsockopt(hctx->con->fd, IPPROTO_TCP, TCP_NODELAY,
-                   &flag, sizeof(flag)) == -1) {
-        DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "fail to set TCP_NODELAY");
-        _tcp_server_disconnect(hctx);
-        hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
-        hctx->con->mode = DIRECT;
-        return HANDLER_FINISHED;
+    if (!ws_extract_value(hctx, MOD_WEBSOCKET_CONFIG_COMMAND, &command, 0)) {
+	if (ws_command_execute(hctx, command))
+	    return -1;
+
+    } else {
+	if (ws_extract_value(hctx, MOD_WEBSOCKET_CONFIG_HOST, &host, 1))
+	    return -1;
+	if (ws_extract_value(hctx, MOD_WEBSOCKET_CONFIG_PORT, &port, 1))
+	    return -1;
+	snprintf(logstr, sizeof(logstr),
+		 "try to connect backend server: %s:%s", host, port);
+	DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG, "s", logstr);
+	hctx->fd = mod_websocket_tcp_server_connect(host, port);
+	if (hctx->fd < 0) {
+	    DEBUG_LOG(MOD_WEBSOCKET_LOG_WARNING,
+		      "s", "fail to connect backend server");
+	    hctx->con->http_status = MOD_WEBSOCKET_SERVICE_UNAVAILABLE;
+	    hctx->con->mode = DIRECT;
+	    return -1;
+	}
+	if (setsockopt(hctx->fd, IPPROTO_TCP, TCP_NODELAY,
+		       &flag, sizeof(flag)) == -1) {
+	    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "fail to set TCP_NODELAY");
+	    ws_disconnect(hctx);
+	    hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
+	    hctx->con->mode = DIRECT;
+	    return HANDLER_FINISHED;
+	}
+	if (setsockopt(hctx->con->fd, IPPROTO_TCP, TCP_NODELAY,
+		       &flag, sizeof(flag)) == -1) {
+	    DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "fail to set TCP_NODELAY");
+	    ws_disconnect(hctx);
+	    hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
+	    hctx->con->mode = DIRECT;
+	    return HANDLER_FINISHED;
+	}
     }
 
 #ifdef	_MOD_WEBSOCKET_WITH_ICU_
-    du = array_get_element(hctx->ext->value, MOD_WEBSOCKET_CONFIG_LOCALE);
-    if (!du) {
-        locale = MOD_WEBSOCKET_UTF8_STR;
-    } else {
-        locale = (((data_string *)du)->value) ?
-            ((data_string *)du)->value->ptr : MOD_WEBSOCKET_UTF8_STR;
-    }
+    locale = MOD_WEBSOCKET_UTF8_STR;
+
+    ws_extract_value(hctx, MOD_WEBSOCKET_CONFIG_LOCALE, &locale, 0);
     hctx->cnv = mod_websocket_conv_init(locale);
     if (!hctx->cnv) {
         DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR, "s", "no memory");
-        _tcp_server_disconnect(hctx);
+        ws_disconnect(hctx);
         hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
         hctx->con->mode = DIRECT;
         return HANDLER_FINISHED;
@@ -353,7 +551,7 @@ int _tcp_server_connect(handler_ctx *hctx) {
                 struct sockaddr_in *s = (struct sockaddr_in *)&caddr;
                 cport = ntohs(s->sin_port);
                 inet_ntop(AF_INET, &s->sin_addr, ipstr, sizeof(ipstr));
-            } else {
+            } else if (caddr.ss_family == AF_INET6) {
                 struct sockaddr_in6 *s = (struct sockaddr_in6 *)&caddr;
                 cport = ntohs(s->sin6_port);
                 inet_ntop(AF_INET6, &s->sin6_addr, ipstr, sizeof(ipstr));
@@ -367,12 +565,12 @@ int _tcp_server_connect(handler_ctx *hctx) {
         // connected client fd: num(addr:port,UTF-8) -> server fd: num(addr:port,locale)
         snprintf(logstr, sizeof(logstr),
                  "connected client fd: %d (%s:%d) -> server fd: %d (%s:%s,%s)",
-                 hctx->con->fd, ipstr, cport, hctx->fd, host->ptr, port->ptr, locale);
+                 hctx->con->fd, ipstr, cport, hctx->fd, host, port, locale);
 #else
         // connected client fd: num(addr:port,UTF-8) -> server fd: num(addr:port,UTF-8)
         snprintf(logstr, sizeof(logstr),
                  "connected client fd: %d (%s:%d) -> server fd: %d (%s:%s)",
-                 hctx->con->fd, ipstr, cport, hctx->fd, host->ptr, port->ptr);
+                 hctx->con->fd, ipstr, cport, hctx->fd, host, port);
 #endif	/* _MOD_WEBSOCKET_WITH_ICU_ */
 
         DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO, "s", logstr);
@@ -381,7 +579,7 @@ int _tcp_server_connect(handler_ctx *hctx) {
     return 0;
 }
 
-void _tcp_server_disconnect(handler_ctx *hctx) {
+void ws_disconnect(handler_ctx *hctx) {
     if (hctx->fd > 0) {
         DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO,
                   "sd", "disconnect server fd:", hctx->fd);
@@ -405,19 +603,19 @@ handler_t _handle_fdevent(server *srv, void *ctx, int revents) {
                   "sdsd",
                   "recv NVAL event: fd(srv) =", hctx->fd,
                   "fd(cli) =", hctx->con->fd);
-        _tcp_server_disconnect(hctx);
+        ws_disconnect(hctx);
     } else if (revents & FDEVENT_HUP || revents & FDEVENT_ERR) {
         DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR,
                   "sdsd",
                   "recv HUP or ERR event: fd(srv) =", hctx->fd,
                   "fd(cli) =", hctx->con->fd);
-        _tcp_server_disconnect(hctx);
+        ws_disconnect(hctx);
     } else if (revents & FDEVENT_IN) {
         errno = 0;
         memset(readbuf, 0, sizeof(readbuf));
         siz = read(hctx->fd, readbuf, UINT16_MAX - 1);
         if (siz == 0) {
-            _tcp_server_disconnect(hctx);
+            ws_disconnect(hctx);
         } else if (siz > 0) {
             DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG,
                       "sdsx",
@@ -438,13 +636,13 @@ handler_t _handle_fdevent(server *srv, void *ctx, int revents) {
                                              readbuf, (size_t)siz) < 0) {
                     DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR,
                               "sd", "failed to send frame:", hctx->fd);
-                    _tcp_server_disconnect(hctx);
+                    ws_disconnect(hctx);
                 }
             }
         } else if (errno != EAGAIN && errno != EINTR) {
             DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR,
                       "ss", "can't read from server:", strerror(errno));
-            _tcp_server_disconnect(hctx);
+            ws_disconnect(hctx);
         } else {
             DEBUG_LOG(MOD_WEBSOCKET_LOG_DEBUG,
                       "s", strerror(errno));
@@ -548,7 +746,7 @@ handler_t _disconnect(server *srv, connection *con, void *pd) {
         DEBUG_LOG(MOD_WEBSOCKET_LOG_INFO,
                   "sd", "disconnect client fd:", hctx->con->fd);
         if (hctx->fd > 0) {
-            _tcp_server_disconnect(hctx);
+            ws_disconnect(hctx);
         }
         _handler_ctx_free(hctx);
         con->plugin_ctx[p->id] = NULL;
@@ -716,13 +914,13 @@ SUBREQUEST_FUNC(_handle_subrequest) {
             }
         }
         /* connect to backend server */
-        if (_tcp_server_connect(hctx) < 0) {
+        if (ws_tcp_connect(hctx) < 0) {
             return HANDLER_FINISHED;
         }
         /* create response */
         wsret = mod_websocket_handshake_create_response(hctx);
         if (wsret != MOD_WEBSOCKET_OK) {
-            _tcp_server_disconnect(hctx);
+            ws_disconnect(hctx);
             hctx->con->http_status = wsret;
             hctx->con->mode = DIRECT;
             return HANDLER_FINISHED;
@@ -751,7 +949,7 @@ SUBREQUEST_FUNC(_handle_subrequest) {
             DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR,
                       "ss", "send handshake response error:",
                       strerror(errno));
-            _tcp_server_disconnect(hctx);
+            ws_disconnect(hctx);
             chunkqueue_reset(hctx->tocli);
             hctx->con->http_status = MOD_WEBSOCKET_INTERNAL_SERVER_ERROR;
             hctx->con->mode = DIRECT;
@@ -856,7 +1054,7 @@ SUBREQUEST_FUNC(_handle_subrequest) {
                     DEBUG_LOG(MOD_WEBSOCKET_LOG_ERR,
                               "ss", "can't send data to client:",
                               strerror(errno));
-                    _tcp_server_disconnect(hctx);
+                    ws_disconnect(hctx);
                     break;
                 }
             }
@@ -954,7 +1152,7 @@ TRIGGER_FUNC(_handle_trigger) {
                 srv->NETWORK_BACKEND_WRITE(srv, con, hctx->con->fd,
                                            hctx->tocli);
             }
-            _tcp_server_disconnect(hctx);
+            ws_disconnect(hctx);
             chunkqueue_remove_finished_chunks(hctx->tocli);
             chunkqueue_reset(hctx->tosrv);
             connection_set_state(srv, con, CON_STATE_CLOSE);
@@ -965,7 +1163,20 @@ TRIGGER_FUNC(_handle_trigger) {
     return HANDLER_GO_ON;
 }
 
+static void
+sigchld_handler (int sig NOTUSED)
+{
+    while (waitpid(-1, NULL, WNOHANG) > 0)
+	continue;
+}
+
 int mod_websocket_plugin_init(plugin *p) {
+    struct sigaction sa;
+
+    bzero(&sa, sizeof(sa));
+    sa.sa_handler =  sigchld_handler;
+    sigaction(SIGCHLD, &sa, 0);
+
     p->version = LIGHTTPD_VERSION_ID;
     p->name = buffer_init_string("mod_websocket");
     p->init = _init;
