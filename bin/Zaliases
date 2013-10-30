@@ -1,0 +1,24 @@
+set top_src=`pwd`
+alias Zautoreconf "(cd $top_src; autoreconf --install)"
+
+set opts = '\
+--enable-silent-rules \
+--with-websocket=ALL \
+--prefix ~/work/root/ \
+--with-openssl \
+--with-pcre \
+--with-zlib \
+--with-bzip2 \
+--without-libicu \
+'
+
+set opts=`echo $opts`
+
+setenv CONFIGURE_OPTS "$opts"
+
+alias Zconfigure "(cd $top_src/build; ../configure $opts )"
+
+alias Zbuild "(cd $top_src/build; make \!* )"
+
+mkdir -p build
+cd build
