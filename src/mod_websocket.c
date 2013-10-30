@@ -416,7 +416,7 @@ static int ws_command_build (handler_ctx *hctx, const char *command,
 static int ws_command_execute (handler_ctx *hctx, const char *command) {
     int fd[2], pid, i;
     char *arg0;
-    char **args, **env = { NULL };
+    char **args;
 
     if (ws_command_build(hctx, command, &args))
 	return -1;
@@ -443,13 +443,12 @@ static int ws_command_execute (handler_ctx *hctx, const char *command) {
 	/* Child: close half the pair and use the other half as stdin/out */
 	close(fd[1]);
 
-	close(0);
 	dup2(fd[0], 0);		/* stdin */
-	close(1);
 	dup2(fd[0], 1);		/* stdout */
 
-	execve(arg0, args, env);
+	execv(arg0, args);
 
+	fprintf(stderr, "failed: %s\n", strerror(errno));
 	DEBUG_LOG(MOD_WEBSOCKET_LOG_WARNING,
 		  "sss", "exec failed", strerror(errno), arg0);
 	_exit(1);
