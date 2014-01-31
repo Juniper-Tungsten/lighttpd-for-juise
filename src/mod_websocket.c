@@ -323,7 +323,9 @@ static char *ws_command_lookup (handler_ctx *hctx NOTUSED, char *varname) {
 	}
     } else {
 	if (strcmp(varname, "remoteuser") == 0) {
-	    res = strdup(getlogin());
+	    if (getlogin()) {
+		res = strdup(getlogin());
+	    }
 	} else {
 	}
     }
