@@ -1,0 +1,8 @@
+usr/lib/lighttpd-for-juise/mod_auth.so
+usr/lib/lighttpd-for-juise/mod_expire.so
+usr/lib/lighttpd-for-juise/mod_access.so
+usr/lib/lighttpd-for-juise/mod_rewrite.so
+usr/lib/lighttpd-for-juise/mod_cgi.so
+usr/lib/lighttpd-for-juise/mod_fastcgi.so
+usr/lib/lighttpd-for-juise/mod_websocket.so
+usr/sbin/lighttpd

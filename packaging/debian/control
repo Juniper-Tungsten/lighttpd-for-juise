@@ -1,0 +1,21 @@
+Source: lighttpd-for-juise
+Section: httpd
+Priority: extra
+Maintainer: Rob Johnston <rjohnst@juniper.net>
+Build-Depends: debhelper (>= 8.0.0), autotools-dev
+Standards-Version: 3.9.3
+Homepage: https://github.com/Juniper/lighttpd-for-juise
+
+Package: lighttpd-for-juise
+Architecture: amd64
+Depends: libattr1 (>= 1:2.4.46-8), libbz2-1.0, libc6 (>= 2.4), libfam0, libldap-2.4-2 (>= 2.4.7), libpcre3 (>= 8.10), libssl1.0.0 (>= 1.0.0), zlib1g (>= 1:1.1.4), perl, lsb-base (>= 3.2-14) | systemd (>= 29.1), mime-support, libterm-readline-perl-perl
+Recommends: spawn-fcgi
+Suggests: openssl, rrdtool, apache2-utils
+Provides: httpd, httpd-cgi
+Section: httpd
+Priority: optional
+Homepage: https://github.com/Juniper/lighttpd-for-juise
+Description: fast webserver with minimal memory footprint + mod_websocket
+ This package contains the standard lighttpd web server + mod_websocket
+ additions.  It only contains the modules required for juise/clira.
+ See https://github.com/Juniper/lighttpd-for-juise for more information.

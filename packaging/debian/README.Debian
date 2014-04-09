@@ -1,0 +1,14 @@
+lighttpd-for-juise
+------------------
+
+This is simply a forked version of lighttpd that includes Norio Kobota's
+mod_websocket library compiled in along with various modules that are required
+for juise.  It should not be used for anything but hosting Clira since many
+modules are not included with it.
+
+mod_websocket patches the lighttpd source code so juise cannot use the standard
+lighttpd distribution.
+
+lighttpd is available at: http://www.lighttpd.net/
+mod_websocket is available at: https://github.com/nori0428/mod_websocket
+
