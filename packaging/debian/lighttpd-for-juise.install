@@ -5,4 +5,7 @@ usr/lib/lighttpd-for-juise/mod_rewrite.so
 usr/lib/lighttpd-for-juise/mod_cgi.so
 usr/lib/lighttpd-for-juise/mod_fastcgi.so
 usr/lib/lighttpd-for-juise/mod_websocket.so
+usr/lib/lighttpd-for-juise/mod_indexfile.so
+usr/lib/lighttpd-for-juise/mod_dirlisting.so
+usr/lib/lighttpd-for-juise/mod_staticfile.so
 usr/sbin/lighttpd
