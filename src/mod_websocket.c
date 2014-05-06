@@ -47,6 +47,8 @@
 
 #include "mod_websocket.h"
 
+#include <pwd.h>
+
 #ifdef	HAVE_SYS_FILIO_H
 # include <sys/filio.h>
 #endif	/* HAVE_SYS_FILIO_H */
@@ -323,8 +325,9 @@ static char *ws_command_lookup (handler_ctx *hctx NOTUSED, char *varname) {
 	}
     } else {
 	if (strcmp(varname, "remoteuser") == 0) {
-	    if (getlogin()) {
-		res = strdup(getlogin());
+	    struct passwd *pwd = getpwuid(getuid());
+	    if (pwd && pwd->pw_name) {
+		res = strdup(pwd->pw_name);
 	    }
 	} else {
 	}
