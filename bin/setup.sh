@@ -24,10 +24,10 @@ fi
 echo "Creating build directory ..."
 mkdir build
 
-echo "Setup is complete.  To build libslax:"
+echo "Setup is complete.  To build lighttpd-for-juise:"
 
-echo "    1) Type 'cd build ; ../configure' to configure libslax"
-echo "    2) Type 'make' to build libslax"
-echo "    3) Type 'make install' to install libslax"
+echo "    1) Type 'cd build ; ../configure' to configure lighttpd-for-juise"
+echo "    2) Type 'make' to build lighttpd-for-juise"
+echo "    3) Type 'make install' to install lighttpd-for-juise"
 
 exit 0

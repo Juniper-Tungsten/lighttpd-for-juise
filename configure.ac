@@ -715,7 +715,9 @@ AC_CONFIG_FILES([Makefile src/Makefile
 		 tests/docroot/www/go/Makefile \
 		 tests/docroot/www/indexfile/Makefile \
 		 tests/docroot/www/expire/Makefile \
-		 distribute.sh])
+		 distribute.sh \
+		 packaging/lighttpd-for-juise.spec \
+		 packaging/lighttpd-for-juise.pc])
 AC_OUTPUT
 
 
