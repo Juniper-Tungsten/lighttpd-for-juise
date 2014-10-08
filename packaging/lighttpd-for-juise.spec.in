@@ -24,16 +24,20 @@ This package provides a vanilla version of lighttpd with mod_websocket patched
 into it.  No other changes have been made to the source other than those
 required to get mod_websocket compiled in and enabled.
 
+%define _unpackaged_files_terminate_build 0
+
 %prep
 %setup -q
 
 %build
-%configure
+%configure --with-websocket=ALL --without-libicu
 make %{?_smp_mflags}
 
 %install
 rm -rf $RPM_BUILD_ROOT
 make DESTDIR="$RPM_BUILD_ROOT" install
+mkdir -p ${RPM_BUILD_ROOT}/usr/lib64/lighttpd-for-juise
+mv ${RPM_BUILD_ROOT}/usr/lib64/*.so  ${RPM_BUILD_ROOT}/usr/lib64/lighttpd-for-juise
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -42,6 +46,6 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %{_sbindir}/*
-%{_libdir}/*
+%{_libdir}/*/*
 %{_mandir}/*/*
 %docdir %{_mandir}/*/*
