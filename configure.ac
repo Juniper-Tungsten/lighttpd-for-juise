@@ -620,7 +620,7 @@ AM_CONDITIONAL(CHECK_WITH_FASTCGI, test "x$fastcgi_found" = xyes)
 
 dnl check for extra compiler options (warning options)
 if test "${GCC}" = "yes"; then
-    CFLAGS="${CFLAGS} -Wall -W -Wshadow -fno-inline-functions-called-once"
+    CFLAGS="${CFLAGS} -Wall -W -Wshadow"
 fi
 
 AC_ARG_ENABLE(extra-warnings,
