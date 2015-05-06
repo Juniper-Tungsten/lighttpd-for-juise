@@ -16,12 +16,14 @@
 CWD=`pwd`
 BUILDDIR="$CWD/build"
 STAGEDIR="$BUILDDIR/stage"
-VERSION=`grep "PACKAGE_VERSION='" ../../configure | cut -d "'" -f 2`
 
 mkdir -p ${STAGEDIR}
 cd ../..
 autoreconf -f -i
 cd $BUILDDIR
+
+VERSION=`grep "PACKAGE_VERSION='" ../../../configure | cut -d "'" -f 2`
+
 ../../../configure --with-websocket=ALL --without-libicu
 make install DESTDIR=$STAGEDIR
 cd $STAGEDIR && tar -cjf ../../lighttpd-for-juise-$VERSION.tar.bz2 *
