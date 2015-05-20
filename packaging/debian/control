@@ -8,7 +8,7 @@ Homepage: https://github.com/Juniper/lighttpd-for-juise
 
 Package: lighttpd-for-juise
 Architecture: amd64
-Depends: libattr1 (>= 1:2.4.46-8), libbz2-1.0, libc6 (>= 2.4), libfam0, libldap-2.4-2 (>= 2.4.7), libpcre3 (>= 8.10), libssl1.0.0 (>= 1.0.0), zlib1g (>= 1:1.1.4), perl, lsb-base (>= 3.2-14) | systemd (>= 29.1), mime-support, libterm-readline-perl-perl
+Depends: libattr1 (>= 1:2.4.46-8), libbz2-1.0, libc6 (>= 2.4), libldap-2.4-2 (>= 2.4.7), libpcre3 (>= 8.10), libssl1.0.0 (>= 1.0.0), zlib1g (>= 1:1.1.4), lsb-base (>= 3.2-14) | systemd (>= 29.1), mime-support
 Recommends: spawn-fcgi
 Suggests: openssl, rrdtool, apache2-utils
 Provides: httpd, httpd-cgi

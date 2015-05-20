@@ -8,4 +8,4 @@ usr/lib/lighttpd-for-juise/mod_websocket.so
 usr/lib/lighttpd-for-juise/mod_indexfile.so
 usr/lib/lighttpd-for-juise/mod_dirlisting.so
 usr/lib/lighttpd-for-juise/mod_staticfile.so
-usr/sbin/lighttpd
+usr/sbin/lighttpd-for-juise
