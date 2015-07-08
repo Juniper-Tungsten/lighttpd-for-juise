@@ -1,7 +1,7 @@
 dnl                                               -*- Autoconf -*-
 dnl Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.57)
-AC_INIT([lighttpd], [1.4.33], [contact@lighttpd.net])
+AC_INIT([lighttpd], [1.4.33-JNPR-1], [contact@lighttpd.net])
 
 AC_CONFIG_SRCDIR([src/server.c])
 AC_CONFIG_HEADER([config.h])
@@ -635,8 +635,8 @@ if test x$extrawarnings = xtrue; then
     CFLAGS="${CFLAGS} -g -O2 -g2 -Wall -Wmissing-declarations -Wdeclaration-after-statement -Wno-pointer-sign -Wcast-align -Winline -Wsign-compare -Wnested-externs -Wpointer-arith -Wl,--as-needed -Wformat-security"
 fi
 
-dnl build version-id
-LIGHTTPD_VERSION_ID=`echo $PACKAGE_VERSION | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
+dnl build version-id (JNPR hack to remove 'JNPR-*' from version first
+LIGHTTPD_VERSION_ID=`echo $PACKAGE_VERSION | $AWK -F '-JNPR' '{print $1}' | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
 dnl check for websocket support
