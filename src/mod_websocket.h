@@ -60,6 +60,7 @@
 #define	MOD_WEBSOCKET_CONFIG_PORT		"port"
 #define	MOD_WEBSOCKET_CONFIG_SUBPROTO		"subproto"
 #define	MOD_WEBSOCKET_CONFIG_ORIGINS		"origins"
+#define MOD_WEBSOCKET_CONFIG_COMMAND		"command"
 
 #ifdef	_MOD_WEBSOCKET_WITH_ICU_
 # define	MOD_WEBSOCKET_CONFIG_LOCALE	"locale"
@@ -93,10 +94,15 @@ typedef unsigned char mod_websocket_bool_t;
 #define	MOD_WEBSOCKET_FALSE			(0)
 #define	MOD_WEBSOCKET_DEFAULT_TIMEOUT_SEC	(30)
 
-#define DEBUG_LOG(level, format, args...)        \
-    if (hctx->pd->conf.debug > level) {\
+#if 0
+#define DEBUG_LOG(level, format, args...) \
+    if (hctx->pd->conf.debug > level) { \
         log_error_write(hctx->srv, __FILE__, __LINE__, format, ## args); \
     }
+#else
+#define DEBUG_LOG(level, format, args...)        \
+        log_error_write(hctx->srv, __FILE__, __LINE__, format, ## args);
+#endif /* 0 */
 
 #if defined (LIGHTTPD_VERSION_ID) && \
     (LIGHTTPD_VERSION_ID >= (1 << 16 | 4 << 8 | 30))

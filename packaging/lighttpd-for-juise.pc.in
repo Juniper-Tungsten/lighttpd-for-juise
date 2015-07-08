@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+
+Name: lighttpd-for-juise
+Version: @VERSION@
+Description: lighttpd web server with mod_websocket patched in
+Requires: libslax bzip2 pcre

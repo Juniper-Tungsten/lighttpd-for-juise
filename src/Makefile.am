@@ -1,12 +1,12 @@
 AM_CFLAGS = $(FAM_CFLAGS)
 
 noinst_PROGRAMS=proc_open lemon # simple-fcgi #graphic evalo bench ajp ssl error_test adserver gen-license
-sbin_PROGRAMS=lighttpd lighttpd-angel
+sbin_PROGRAMS=lighttpd-for-juise lighttpd-for-juise-angel
 LEMON=$(top_builddir)/src/lemon$(EXEEXT)
 
 lemon_SOURCES=lemon.c
 
-lighttpd_angel_SOURCES=lighttpd-angel.c
+lighttpd_for_juise_angel_SOURCES=lighttpd-angel.c
 
 .PHONY: versionstamp parsers
 
@@ -301,10 +301,10 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
 
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 
-lighttpd_SOURCES = $(src)
-lighttpd_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS)
-lighttpd_LDFLAGS = -export-dynamic
-lighttpd_CCPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
+lighttpd_for_juise_SOURCES = $(src)
+lighttpd_for_juise_LDADD = $(PCRE_LIB) $(DL_LIB) $(SENDFILE_LIB) $(ATTR_LIB) $(common_libadd) $(SSL_LIB) $(FAM_LIBS) $(LIBEV_LIBS)
+lighttpd_for_juise_LDFLAGS = -export-dynamic
+lighttpd_for_juise_CCPFLAGS = $(FAM_CFLAGS) $(LIBEV_CFLAGS)
 
 proc_open_SOURCES = proc_open.c buffer.c
 proc_open_CPPFLAGS= -DDEBUG_PROC_OPEN
