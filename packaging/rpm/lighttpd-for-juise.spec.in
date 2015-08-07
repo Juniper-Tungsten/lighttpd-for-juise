@@ -1,6 +1,6 @@
 Name:        lighttpd-for-juise
 Version:     @RPM_SPEC_PACKAGE_VERSION@
-Release:     1
+Release:     1%{?dist}
 Summary:     lighttpd + mod_websocket for juise
 
 Prefix:      /usr
