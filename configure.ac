@@ -639,6 +639,11 @@ dnl build version-id (JNPR hack to remove 'JNPR-*' from version first
 LIGHTTPD_VERSION_ID=`echo $PACKAGE_VERSION | $AWK -F '-JNPR' '{print $1}' | $AWK -F '.' '{print "(" $1 " << 16 | " $2 " << 8 | " $3 ")"}'`
 AC_DEFINE_UNQUOTED([LIGHTTPD_VERSION_ID], [$LIGHTTPD_VERSION_ID], [lighttpd-version-id])
 
+dnl rpm spec Version cannot contain dashes
+RPM_SPEC_PACKAGE_VERSION=`echo $PACKAGE_VERSION | tr - _`
+AC_DEFINE_UNQUOTED([RPM_SPEC_PACKAGE_VERSION], ["$RPM_SPEC_PACKAGE_VERSION"], [rpm-spec-package-version])
+AC_SUBST(RPM_SPEC_PACKAGE_VERSION)
+
 dnl check for websocket support
 AC_MSG_CHECKING(whether --with-websocket option specified)
 AC_ARG_WITH(websocket,
@@ -716,7 +721,7 @@ AC_CONFIG_FILES([Makefile src/Makefile
 		 tests/docroot/www/indexfile/Makefile \
 		 tests/docroot/www/expire/Makefile \
 		 distribute.sh \
-		 packaging/lighttpd-for-juise.spec \
+		 packaging/rpm/lighttpd-for-juise.spec \
 		 packaging/lighttpd-for-juise.pc])
 AC_OUTPUT
 

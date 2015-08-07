@@ -1,6 +1,6 @@
 Name:        lighttpd-for-juise
-Version:     @PACKAGE_VERSION@
-Release:     1%{?dist}
+Version:     @RPM_SPEC_PACKAGE_VERSION@
+Release:     1
 Summary:     lighttpd + mod_websocket for juise
 
 Prefix:      /usr
@@ -15,9 +15,9 @@ Source0:     https://github.com/Juniper/lighttpd-for-juise/releases/@PACKAGE_VER
 
 BuildRoot:   %{_tmppath}/%{name}-%{version}-%{release}-root
 
-BuildRequires:  libslax
 BuildRequires:  bzip2-devel
 BuildRequires:  pcre-devel
+Requires: python
 
 %description
 This package provides a vanilla version of lighttpd with mod_websocket patched
@@ -47,5 +47,3 @@ rm -rf $RPM_BUILD_ROOT
 %files
 %{_sbindir}/*
 %{_libdir}/*/*
-%{_mandir}/*/*
-%docdir %{_mandir}/*/*

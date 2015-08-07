@@ -297,7 +297,7 @@ hdr = server.h buffer.h network.h log.h keyvalue.h \
       sys-mmap.h sys-socket.h mod_cml.h mod_cml_funcs.h \
       splaytree.h proc_open.h status_counter.h \
       mod_magnet_cache.h \
-      version.h
+      version.h base64.h
 
 DEFS= @DEFS@ -DHAVE_VERSION_H -DLIBRARY_DIR="\"$(libdir)\"" -DSBIN_DIR="\"$(sbindir)\""
 
